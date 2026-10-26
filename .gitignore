@@ -1,0 +1,16 @@
+# 虚拟环境
+.venv/
+venv/
+
+# PyCharm 配置
+.idea/
+
+# 上传的测试文件
+uploads/
+
+# Python 缓存
+__pycache__/
+*.pyc
+
+# 环境变量文件
+.env
