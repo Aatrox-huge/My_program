@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>SmartKB-Agent 知识库助手</title>
+    <style>
+        /* 极简的暗黑风格 CSS */
+        body {
+            background-color: #1e1e1e;
+            color: #d4d4d4;
+            font-family: "Microsoft YaHei", sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        #chat-box {
+            width: 80%;
+            max-width: 800px;
+            flex: 1;
+            background-color: #252526;
+            border: 1px solid #3c3c3c;
+            border-radius: 8px;
+            padding: 20px;
+            overflow-y: auto;
+            margin-bottom: 20px;
+        }
+        .message {
+            margin-bottom: 15px;
+            line-height: 1.5;
+        }
+        .user-msg { color: #569cd6; font-weight: bold; }
+        .ai-msg { color: #ce9178; white-space: pre-wrap; } /* pre-wrap 保证换行生效 */
+        #input-area {
+            width: 80%;
+            max-width: 800px;
+            display: flex;
+            gap: 10px;
+        }
+        input {
+            flex: 1;
+            padding: 12px;
+            border-radius: 6px;
+            border: 1px solid #3c3c3c;
+            background-color: #3c3c3c;
+            color: white;
+            outline: none;
+        }
+        button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            background-color: #0e639c;
+            color: white;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        button:hover { background-color: #1177bb; }
+    </style>
+</head>
+<body>
+
+    <h1>🧠 SmartKB-Agent 个人知识库</h1>
+
+    <div id="chat-box">
+        <div class="message">
+            <span class="ai-msg">你好！我是你的私人知识库助手。你可以问我关于你上传的笔记的任何问题。</span>
+        </div>
+    </div>
+
+    <div id="input-area">
+        <input type="text" id="user-input" placeholder="输入你的问题..." onkeypress="handleKeyPress(event)">
+        <button onclick="sendMessage()">发送</button>
+    </div>
+
+    <script>
+        // 回车键发送
+        function handleKeyPress(event) {
+            if (event.key === "Enter") {
+                sendMessage();
+            }
+        }
+
+        async function sendMessage() {
+            const inputElement = document.getElementById("user-input");
+            const chatBox = document.getElementById("chat-box");
+            const query = inputElement.value.trim();
+
+            if (!query) return;
+
+            // 1. 显示用户问题
+            chatBox.innerHTML += `<div class="message"><span class="user-msg">👤 我: </span><span>${query}</span></div>`;
+            inputElement.value = "";
+            chatBox.scrollTop = chatBox.scrollHeight;
+
+            // 2. 显示 AI 思考状态
+            const aiMsgId = "ai-" + Date.now();
+            chatBox.innerHTML += `<div class="message"><span class="ai-msg">🤖 Agent: </span><span id="${aiMsgId}" style="color: #888;">[思考中，正在查询本地笔记...]</span></div>`;
+            chatBox.scrollTop = chatBox.scrollHeight;
+
+            try {
+                // 3. 请求后端的完整 Agent 接口（非流式，等待查库和思考）
+                const response = await fetch("/chat/agent", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ query: query })
+                });
+
+                const data = await response.json();
+                const fullAnswer = data.answer;
+                const aiTextElement = document.getElementById(aiMsgId);
+
+                // 4. 前端模拟打字机效果（逐字渲染完整答案）
+                aiTextElement.innerText = "";
+                aiTextElement.style.color = "#ce9178"; // 恢复正常颜色
+
+                let i = 0;
+                const timer = setInterval(() => {
+                    if (i < fullAnswer.length) {
+                        aiTextElement.innerText += fullAnswer.charAt(i);
+                        i++;
+                        chatBox.scrollTop = chatBox.scrollHeight;
+                    } else {
+                        clearInterval(timer); // 打完收工
+                    }
+                }, 30); // 30 毫秒打一个字，可自己调整速度
+
+            } catch (error) {
+                console.error("请求失败:", error);
+                document.getElementById(aiMsgId).innerText = "抱歉，服务器出错了。";
+            }
+        }
+    </script>
+</body>
+</html>

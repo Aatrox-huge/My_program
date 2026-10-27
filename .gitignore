@@ -14,3 +14,15 @@ __pycache__/
 
 # 环境变量文件
 .env
+
+# 临时测试脚本
+test_rag_direct.py
+test_stream.py
+init_rag.py
+eval_rag.py
+
+# 本地生成的向量库数据
+chroma_db/
+
+
+
