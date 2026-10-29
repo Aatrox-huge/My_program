@@ -20,9 +20,12 @@ test_rag_direct.py
 test_stream.py
 init_rag.py
 eval_rag.py
+worker.py
 
 # 本地生成的向量库数据
 chroma_db/
+
+requirements.txt
 
 
 

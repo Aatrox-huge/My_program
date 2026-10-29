@@ -20,9 +20,10 @@ client = OpenAI(
 # ==========================================
 # 1. 定义你要给大模型使用的工具（真正的数据库查询）
 # ==========================================
-def search_notes_db(keyword: str):
-    """去向量库里进行语义检索"""
-    result = search_in_rag(query=keyword, top_k=2)
+def search_notes_db(keyword: str, user_id: str):
+    """去向量库查询，隔离用户"""
+    from .rag_engine import search_in_rag
+    result = search_in_rag(query=keyword, user_id=user_id)
     return f"【向量库检索结果】:\n{result}"
 
 
@@ -53,37 +54,74 @@ tools_schema = [
 # ==========================================
 # 3. 核心：手搓 ReAct 循环引擎
 # ==========================================
-def run_agent(user_query: str):
-    print(f"\n👤 用户提问: {user_query}")
+from .database import get_db
+from . import models
 
+
+def run_agent(user_query: str, session_id: str,user_id: str = "default_user"):
+    print(f"\n👤 [Session: {session_id}] 用户提问: {user_query}")
+
+    # 1. 获取数据库连接，保存用户的提问
+    db_gen = get_db()
+    db = next(db_gen)
+
+    # 保存用户问题到 MySQL
+    user_msg = models.ChatHistory(session_id=session_id,
+                                  role="user", content=user_query,
+                                  user_id=user_id,)
+    db.add(user_msg)
+    db.commit()
+
+    # 2. 从 MySQL 取出该会话最近的 10 条历史记录
+    history = db.query(models.ChatHistory).filter(
+        models.ChatHistory.session_id == session_id,
+        models.ChatHistory.user_id == user_id  # 🌟 查询时过滤！绝不串号！
+    ).order_by(models.ChatHistory.id.desc()).limit(10).all()
+
+    # 因为查出来是倒序的，我们要把它反转成正序（时间顺序）
+    history.reverse()
+
+    # 3. 构建发给大模型的 Messages 数组
     messages = [
         {"role": "system",
-         "content": "你是一个私人知识库助手。如果用户问及笔记内容，请调用 search_notes_db 工具进行搜索。"},
-        {"role": "user", "content": user_query}
+         "content": "你是一个私人知识库助手。如果用户问及笔记内容，请调用 search_notes_db 工具进行搜索。"}
     ]
 
-    # 我们设置最多循环 3 次，防止大模型陷入死循环
+
+    # 把历史记录加进去，防止 tool 的脏数据把模型搞崩
+    for msg in history:
+        if msg.role in ["user", "assistant"] and msg.content:
+            messages.append({"role": msg.role, "content": msg.content})
+
+    # 4. 开始 ReAct 循环
     for step in range(3):
         print(f"\n--- [第 {step + 1} 轮思考] ---")
-
-        # 1. 请求大模型
         response = client.chat.completions.create(
-            model="deepseek-flash",  # 如果用通义千问，改为 qwen-turbo 或 qwen-plus
+            model="deepseek-chat",
             messages=messages,
             tools=tools_schema,
-            tool_choice="auto"
+            tool_choice="auto",
+            temperature = 0.3,  # 🌟 降低随机性，让回答更稳定
+            frequency_penalty = 0.5  # 🌟 惩罚重复词汇，防止变成复读机
         )
 
         response_msg = response.choices[0].message
 
-        # 2. 如果模型没有调用工具，说明它可以直接回答
         if not response_msg.tool_calls:
             print(f"🤖 Agent 最终回答: {response_msg.content}")
+
+            # 将大模型的回答也存入 MySQL
+            ai_msg = models.ChatHistory(session_id=session_id,
+                                        role="assistant", content=response_msg.content,
+                                        user_id=user_id,)
+            db.add(ai_msg)
+            db.commit()
+            db.close()
+
             return response_msg.content
 
-        # 3. 如果模型要求调用工具
         print("🧠 模型决定调用工具...")
-        messages.append(response_msg)  # 把模型的思考过程存入记忆
+        messages.append(response_msg)
 
         for tool_call in response_msg.tool_calls:
             func_name = tool_call.function.name
@@ -91,21 +129,19 @@ def run_agent(user_query: str):
 
             print(f"🔧 执行本地工具: {func_name}(参数: {args})")
 
-            # 真正执行我们刚才写的 Python 数据库查询函数
             if func_name == "search_notes_db":
-                observation = search_notes_db(args.get("keyword"))
-                print(f"👀 数据库观察结果: {observation[:100]}...")  # 只打印前100字看看
+                observation = search_notes_db(keyword=args.get("keyword"), user_id=user_id)
+                print(f"👀 数据库观察结果: {observation[:100]}...")
 
-                # 4. 把执行结果作为“观察(Observation)”告诉大模型，进入下一轮循环
                 messages.append({
                     "role": "tool",
                     "tool_call_id": tool_call.id,
                     "content": observation
                 })
 
+    db.close()
     print("⚠️ 达到最大循环次数，强制结束。")
     return "思考超时"
-
 
 # # 测试代码
 if __name__ == "__main__":

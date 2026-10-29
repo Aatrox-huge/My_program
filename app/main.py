@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from openai import chat
 from fastapi.staticfiles import StaticFiles  # 新增导入
 from .database import engine, Base
-from .routers import knowledge,chat
+from .routers import knowledge,chat,users
 import uvicorn
 
 # 启动时自动在 MySQL 里建表
@@ -13,6 +13,7 @@ app = FastAPI(title="SmartKB-Agent")
 # 挂载路由
 app.include_router(knowledge.router)
 app.include_router(chat.router)
+app.include_router(users.router)
 
 # 挂载静态文件夹，允许浏览器访问里面的 HTML/JS/CSS
 app.mount("/static", StaticFiles(directory="static"), name="static")

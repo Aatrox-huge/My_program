@@ -1,5 +1,8 @@
+import os
+os.environ["HF_HUB_OFFLINE"] = "1" # 强制离线，拒绝外网检查
 import chromadb
 from sentence_transformers import SentenceTransformer
+
 
 print("🚀 正在通过 HTTP 连接 Docker 里的 ChromaDB (端口 8001)...")
 chroma_client = chromadb.HttpClient(host='127.0.0.1', port=8001)
@@ -11,7 +14,7 @@ print("✅ 成功连接到 Docker ChromaDB，集合已准备就绪！")
 embed_model = SentenceTransformer('all-MiniLM-L6-v2')
 
 
-def add_document_to_rag(doc_id: int, filename: str, text: str):
+def add_document_to_rag(doc_id: int, filename: str, text: str,user_id: str = "default_user"):
     """把文本切片并存入向量库"""
     chunk_size = 500
     overlap = 50
@@ -21,7 +24,7 @@ def add_document_to_rag(doc_id: int, filename: str, text: str):
         chunks.append(chunk)
 
     ids = [f"{doc_id}_{i}" for i in range(len(chunks))]
-    metadatas = [{"filename": filename, "doc_id": doc_id} for _ in range(len(chunks))]
+    metadatas = [{"filename": filename, "doc_id": doc_id,"user_id": user_id} for _ in range(len(chunks))]
     embeddings = embed_model.encode(chunks).tolist()
 
     collection.add(
@@ -33,13 +36,14 @@ def add_document_to_rag(doc_id: int, filename: str, text: str):
     return len(chunks)
 
 
-def search_in_rag(query: str, top_k: int = 2):
+def search_in_rag(query: str,user_id: str = "default_user", top_k: int = 2):
     """根据用户的提问，在向量库里找最相似的片段"""
     query_embedding = embed_model.encode([query]).tolist()
 
     results = collection.query(
         query_embeddings=query_embedding,
-        n_results=top_k
+        n_results=top_k,
+        where = {"user_id": user_id}
     )
 
     if not results['documents'] or len(results['documents'][0]) == 0:

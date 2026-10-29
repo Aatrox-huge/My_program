@@ -2,136 +2,274 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>SmartKB-Agent 知识库助手</title>
+    <title>SmartKB-Agent 个人知识库</title>
+    <!-- 引入 Markdown 和代码高亮 -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.8.0/styles/github-dark.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.8.0/lib/common.min.js"></script>
     <style>
-        /* 极简的暗黑风格 CSS */
-        body {
-            background-color: #1e1e1e;
-            color: #d4d4d4;
-            font-family: "Microsoft YaHei", sans-serif;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-            padding: 20px;
-            box-sizing: border-box;
-        }
-        #chat-box {
-            width: 80%;
-            max-width: 800px;
-            flex: 1;
-            background-color: #252526;
-            border: 1px solid #3c3c3c;
-            border-radius: 8px;
-            padding: 20px;
-            overflow-y: auto;
-            margin-bottom: 20px;
-        }
-        .message {
-            margin-bottom: 15px;
-            line-height: 1.5;
-        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { background-color: #1e1e1e; color: #d4d4d4; font-family: "Microsoft YaHei", sans-serif; height: 100vh; display: flex; overflow: hidden; }
+
+        /* 左侧边栏：文件管理 */
+        .sidebar { width: 300px; background-color: #252526; border-right: 1px solid #3c3c3c; display: flex; flex-direction: column; padding: 20px; }
+        .sidebar h2 { font-size: 18px; margin-bottom: 15px; color: #569cd6; }
+        .upload-area { margin-bottom: 20px; padding-bottom: 20px; border-bottom: 1px solid #3c3c3c; }
+        .upload-area input { width: 100%; margin-bottom: 10px; color: #ccc; }
+        .upload-area button { width: 100%; padding: 8px; background-color: #0e639c; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        .upload-area button:hover { background-color: #1177bb; }
+        .file-list { flex: 1; overflow-y: auto; font-size: 14px; }
+        .file-item { padding: 8px; background: #2d2d2d; margin-bottom: 5px; border-radius: 4px; border-left: 3px solid #ce9178; }
+
+        /* 右侧主区域：聊天界面 */
+        .main-content { flex: 1; display: flex; flex-direction: column; align-items: center; padding: 20px; position: relative; }
+        #chat-box { width: 100%; max-width: 800px; flex: 1; overflow-y: auto; margin-bottom: 20px; }
+        .message { margin-bottom: 15px; line-height: 1.6; }
         .user-msg { color: #569cd6; font-weight: bold; }
-        .ai-msg { color: #ce9178; white-space: pre-wrap; } /* pre-wrap 保证换行生效 */
-        #input-area {
-            width: 80%;
-            max-width: 800px;
-            display: flex;
-            gap: 10px;
-        }
-        input {
-            flex: 1;
-            padding: 12px;
-            border-radius: 6px;
-            border: 1px solid #3c3c3c;
-            background-color: #3c3c3c;
-            color: white;
-            outline: none;
-        }
-        button {
-            padding: 12px 24px;
-            border: none;
-            border-radius: 6px;
-            background-color: #0e639c;
-            color: white;
-            cursor: pointer;
-            font-weight: bold;
-        }
-        button:hover { background-color: #1177bb; }
+        .ai-msg { color: #ce9178; }
+        .input-area { width: 100%; max-width: 800px; display: flex; gap: 10px; }
+        .input-area input { flex: 1; padding: 12px; border-radius: 6px; border: 1px solid #3c3c3c; background-color: #3c3c3c; color: white; outline: none; }
+        .input-area button { padding: 12px 24px; border: none; border-radius: 6px; background-color: #0e639c; color: white; cursor: pointer; font-weight: bold; }
+        .input-area button:hover { background-color: #1177bb; }
+
+        /* 登录/注册遮罩层（默认隐藏） */
+        .auth-modal { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(30, 30, 30, 0.95); display: none; justify-content: center; align-items: center; z-index: 100; }
+        .auth-box { background-color: #252526; padding: 40px; border-radius: 8px; width: 350px; border: 1px solid #3c3c3c; text-align: center; }
+        .auth-box h2 { margin-bottom: 20px; color: #569cd6; }
+        .auth-box input { width: 100%; padding: 12px; margin-bottom: 15px; border-radius: 4px; border: 1px solid #3c3c3c; background: #3c3c3c; color: white; }
+        .auth-box button { width: 100%; padding: 12px; background-color: #0e639c; color: white; border: none; border-radius: 4px; font-size: 16px; cursor: pointer; margin-bottom: 10px; }
+        .auth-box .switch-mode { font-size: 14px; color: #888; cursor: pointer; }
+        .auth-box .switch-mode:hover { color: #fff; }
+        #auth-error { color: #f44336; font-size: 14px; margin-bottom: 10px; display: none; }
+
+        /* 顶部用户信息 */
+        .top-bar { position: absolute; top: 20px; right: 30px; font-size: 14px; color: #888; }
     </style>
 </head>
 <body>
 
-    <h1>🧠 SmartKB-Agent 个人知识库</h1>
-
-    <div id="chat-box">
-        <div class="message">
-            <span class="ai-msg">你好！我是你的私人知识库助手。你可以问我关于你上传的笔记的任何问题。</span>
+    <!-- 🌟 登录/注册弹窗 -->
+    <div class="auth-modal" id="auth-modal">
+        <div class="auth-box">
+            <h2 id="auth-title">欢迎回来</h2>
+            <div id="auth-error"></div>
+            <input type="text" id="auth-username" placeholder="请输入用户名">
+            <input type="password" id="auth-password" placeholder="请输入密码">
+            <button onclick="handleAuth()" id="auth-btn">登录</button>
+            <div class="switch-mode" onclick="toggleAuthMode()" id="auth-switch">没有账号？点击注册</div>
         </div>
     </div>
 
-    <div id="input-area">
-        <input type="text" id="user-input" placeholder="输入你的问题..." onkeypress="handleKeyPress(event)">
-        <button onclick="sendMessage()">发送</button>
+    <!-- 左侧文件管理后台 -->
+    <div class="sidebar">
+        <h2>我的知识库</h2>
+        <div class="upload-area">
+            <input type="file" id="file-input" accept=".txt,.md">
+            <button onclick="uploadFile()">上传文件</button>
+        </div>
+        <div class="file-list" id="file-list">
+            <!-- 文件列表将在这里渲染 -->
+        </div>
+    </div>
+
+    <!-- 右侧聊天区域 -->
+    <div class="main-content">
+        <div class="top-bar">
+            👤 当前用户: <span id="display-username" style="color:#569cd6; font-weight:bold;"></span>
+            <button onclick="logout()" style="background:transparent; border:1px solid #555; color:#ccc; margin-left:10px; cursor:pointer; border-radius:4px; padding:2px 8px;">退出</button>
+        </div>
+
+        <div id="chat-box">
+            <div class="message">
+                <span class="ai-msg">你好！我是你的私人知识库助手。你可以上传文档，然后向我提问。</span>
+            </div>
+        </div>
+
+        <div class="input-area">
+            <input type="text" id="user-input" placeholder="输入你的问题..." onkeypress="if(event.key==='Enter') sendMessage()">
+            <button onclick="sendMessage()">发送</button>
+        </div>
     </div>
 
     <script>
-        // 回车键发送
-        function handleKeyPress(event) {
-            if (event.key === "Enter") {
-                sendMessage();
+        // 全局状态
+        let isRegisterMode = false;
+        let token = localStorage.getItem("access_token") || null;
+
+        // 生成独立会话 ID
+        function getSessionId() {
+            let sid = localStorage.getItem("chat_session");
+            if (!sid) {
+                sid = "session_" + Date.now();
+                localStorage.setItem("chat_session", sid);
             }
+            return sid;
         }
 
-        async function sendMessage() {
-            const inputElement = document.getElementById("user-input");
-            const chatBox = document.getElementById("chat-box");
-            const query = inputElement.value.trim();
+        // ================= 1. 登录与注册逻辑 =================
+        function toggleAuthMode() {
+            isRegisterMode = !isRegisterMode;
+            document.getElementById("auth-title").innerText = isRegisterMode ? "注册新账号" : "欢迎回来";
+            document.getElementById("auth-btn").innerText = isRegisterMode ? "注册" : "登录";
+            document.getElementById("auth-switch").innerText = isRegisterMode ? "已有账号？去登录" : "没有账号？点击注册";
+            document.getElementById("auth-error").style.display = "none";
+        }
 
-            if (!query) return;
+        async function handleAuth() {
+            const user = document.getElementById("auth-username").value;
+            const pwd = document.getElementById("auth-password").value;
+            const errorDiv = document.getElementById("auth-error");
 
-            // 1. 显示用户问题
-            chatBox.innerHTML += `<div class="message"><span class="user-msg">👤 我: </span><span>${query}</span></div>`;
-            inputElement.value = "";
-            chatBox.scrollTop = chatBox.scrollHeight;
+            if (!user || !pwd) { showAuthError("请填写完整"); return; }
 
-            // 2. 显示 AI 思考状态
-            const aiMsgId = "ai-" + Date.now();
-            chatBox.innerHTML += `<div class="message"><span class="ai-msg">🤖 Agent: </span><span id="${aiMsgId}" style="color: #888;">[思考中，正在查询本地笔记...]</span></div>`;
-            chatBox.scrollTop = chatBox.scrollHeight;
-
+            const url = isRegisterMode ? "/auth/register" : "/auth/login";
             try {
-                // 3. 请求后端的完整 Agent 接口（非流式，等待查库和思考）
-                const response = await fetch("/chat/agent", {
+                const res = await fetch(url, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ query: query })
+                    body: JSON.stringify({ username: user, password: pwd })
+                });
+                const data = await res.json();
+
+                if (res.ok) {
+                    if (isRegisterMode) {
+                        alert("注册成功！请登录");
+                        toggleAuthMode();
+                    } else {
+                        token = data.access_token;
+                        localStorage.setItem("access_token", token);
+                        localStorage.setItem("username", user);
+                        initApp(); // 初始化主界面
+                    }
+                } else {
+                    showAuthError(data.detail || "操作失败");
+                }
+            } catch (e) { showAuthError("网络请求失败"); }
+        }
+
+        function showAuthError(msg) {
+            const errorDiv = document.getElementById("auth-error");
+            errorDiv.innerText = msg;
+            errorDiv.style.display = "block";
+        }
+
+        function logout() {
+            localStorage.removeItem("access_token");
+            localStorage.removeItem("username");
+            token = null;
+            document.getElementById("auth-modal").style.display = "flex";
+
+             // 🌟 新增：退出时清空聊天框，防止下个用户看到
+            document.getElementById("chat-box").innerHTML = `
+                <div class="message">
+                    <span class="ai-msg">你好！我是你的私人知识库助手。你可以上传文档，然后向我提问。</span>
+                </div>`;
+
+        }
+
+        // ================= 2. 主界面初始化 =================
+        function initApp() {
+            document.getElementById("auth-modal").style.display = "none";
+            document.getElementById("display-username").innerText = localStorage.getItem("username");
+            document.getElementById("chat-box").innerHTML = `
+                <div class="message">
+                    <span class="ai-msg">你好！我是你的私人知识库助手。你可以上传文档，然后向我提问。</span>
+                </div>
+            `;
+            loadFiles(); // 加载左侧文件列表
+        }
+
+        // 页面加载时检查是否已登录
+        window.onload = () => {
+            if (token) {
+                initApp();
+            } else {
+                document.getElementById("auth-modal").style.display = "flex";
+            }
+        };
+
+        // ================= 3. 文件上传与列表 =================
+        async function uploadFile() {
+            const fileInput = document.getElementById("file-input");
+            if (!fileInput.files.length) { alert("请先选择文件"); return; }
+
+            const formData = new FormData();
+            formData.append("file", fileInput.files[0]);
+            // 注意：不用传 user_id，后端会自动从 Token 里拿
+
+            try {
+                const res = await fetch("/knowledge/upload", {
+                    method: "POST",
+                    headers: { "Authorization": `Bearer ${token}` }, // 带上 Token
+                    body: formData
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    alert("上传成功！");
+                    fileInput.value = ""; // 清空选择
+                    loadFiles(); // 刷新列表
+                } else {
+                    alert("上传失败: " + data.detail);
+                }
+            } catch (e) { alert("网络错误"); }
+        }
+
+        async function loadFiles() {
+            try {
+                const res = await fetch("/knowledge/list", {
+                    headers: { "Authorization": `Bearer ${token}` }
+                });
+                if (res.ok) {
+                    const files = await res.json();
+                    const list = document.getElementById("file-list");
+                    list.innerHTML = "";
+                    files.forEach(f => {
+                        list.innerHTML += `<div class="file-item">📄 ${f.filename}</div>`;
+                    });
+                }
+            } catch (e) { console.log("加载列表失败"); }
+        }
+
+        // ================= 4. 聊天逻辑 =================
+        async function sendMessage() {
+            const input = document.getElementById("user-input");
+            const query = input.value.trim();
+            if (!query) return;
+
+            const chatBox = document.getElementById("chat-box");
+            chatBox.innerHTML += `<div class="message"><span class="user-msg">👤 我: </span><span>${query}</span></div>`;
+            input.value = "";
+            chatBox.scrollTop = chatBox.scrollHeight;
+
+            const aiMsgId = "ai-" + Date.now();
+            chatBox.innerHTML += `<div class="message"><span class="ai-msg">🤖 Agent: </span><span id="${aiMsgId}" style="color: #888;">[思考中...]</span></div>`;
+
+            try {
+                const res = await fetch("/chat/agent", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${token}` // 带上 Token
+                    },
+                    body: JSON.stringify({
+                        query: query,
+                        session_id: getSessionId()
+                        // 注意：这里绝对不传 user_id
+                    })
                 });
 
-                const data = await response.json();
-                const fullAnswer = data.answer;
-                const aiTextElement = document.getElementById(aiMsgId);
+                const data = await res.json();
+                const aiText = document.getElementById(aiMsgId);
 
-                // 4. 前端模拟打字机效果（逐字渲染完整答案）
-                aiTextElement.innerText = "";
-                aiTextElement.style.color = "#ce9178"; // 恢复正常颜色
-
-                let i = 0;
-                const timer = setInterval(() => {
-                    if (i < fullAnswer.length) {
-                        aiTextElement.innerText += fullAnswer.charAt(i);
-                        i++;
-                        chatBox.scrollTop = chatBox.scrollHeight;
-                    } else {
-                        clearInterval(timer); // 打完收工
-                    }
-                }, 30); // 30 毫秒打一个字，可自己调整速度
-
-            } catch (error) {
-                console.error("请求失败:", error);
-                document.getElementById(aiMsgId).innerText = "抱歉，服务器出错了。";
-            }
+                if (res.ok) {
+                    aiText.style.color = "#ce9178";
+                    aiText.innerHTML = marked.parse(data.answer);
+                    document.querySelectorAll('pre code').forEach((el) => hljs.highlightElement(el));
+                    chatBox.scrollTop = chatBox.scrollHeight;
+                } else {
+                    aiText.innerText = "请求失败: " + data.detail;
+                }
+            } catch (e) { console.log(e); }
         }
     </script>
 </body>
