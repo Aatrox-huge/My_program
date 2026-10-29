@@ -25,7 +25,7 @@ worker.py
 # 本地生成的向量库数据
 chroma_db/
 
-requirements.txt
+
 
 
 
