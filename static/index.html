@@ -242,34 +242,41 @@
             chatBox.scrollTop = chatBox.scrollHeight;
 
             const aiMsgId = "ai-" + Date.now();
-            chatBox.innerHTML += `<div class="message"><span class="ai-msg">🤖 Agent: </span><span id="${aiMsgId}" style="color: #888;">[思考中...]</span></div>`;
+            chatBox.innerHTML += `<div class="message"><span class="ai-msg">🤖 Agent: </span><span id="${aiMsgId}"></span></div>`;
+
+            const aiTextElement = document.getElementById(aiMsgId);
+            let fullResponseText = "";
 
             try {
-                const res = await fetch("/chat/agent", {
+                const res = await fetch("/chat/stream", { // 🌟 请求流式接口
                     method: "POST",
                     headers: {
                         "Content-Type": "application/json",
-                        "Authorization": `Bearer ${token}` // 带上 Token
+                        "Authorization": `Bearer ${token}`
                     },
-                    body: JSON.stringify({
-                        query: query,
-                        session_id: getSessionId()
-                        // 注意：这里绝对不传 user_id
-                    })
+                    body: JSON.stringify({ query: query, session_id: getSessionId() })
                 });
 
-                const data = await res.json();
-                const aiText = document.getElementById(aiMsgId);
+                // 🌟 核心：使用 Reader 读取流
+                const reader = res.body.getReader();
+                const decoder = new TextDecoder("utf-8");
 
-                if (res.ok) {
-                    aiText.style.color = "#ce9178";
-                    aiText.innerHTML = marked.parse(data.answer);
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    const chunkText = decoder.decode(value, { stream: true });
+                    fullResponseText += chunkText;
+
+                    // 实时用 Markdown 渲染
+                    aiTextElement.innerHTML = marked.parse(fullResponseText);
                     document.querySelectorAll('pre code').forEach((el) => hljs.highlightElement(el));
                     chatBox.scrollTop = chatBox.scrollHeight;
-                } else {
-                    aiText.innerText = "请求失败: " + data.detail;
                 }
-            } catch (e) { console.log(e); }
+            } catch (e) {
+                console.log(e);
+                aiTextElement.innerText = "网络连接失败";
+            }
         }
     </script>
 </body>

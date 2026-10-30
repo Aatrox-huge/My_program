@@ -1,0 +1,76 @@
+services:
+  # 1. 关系型数据库 MySQL
+  mysql-db:
+    image: mysql:8.0
+    container_name: smartkb-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: 123456
+      MYSQL_DATABASE: smart_kb
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    restart: always
+
+  # 2. 缓存与消息队列 Redis
+  redis-db:
+    image: redis:alpine
+    container_name: smartkb-redis
+    ports:
+      - "6379:6379"
+    restart: always
+
+  # 3. 向量数据库 ChromaDB
+  chromadb:
+    image: chromadb/chroma:0.5.18
+    container_name: smartkb-chroma
+    ports:
+      - "8001:8000"
+    volumes:
+      - chroma_data:/chroma/chroma
+    restart: always
+
+  # 4. FastAPI Web 服务
+  web:
+    build: .
+    container_name: smartkb-web
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=mysql+pymysql://root:123456@mysql-db:3306/smart_kb
+      - REDIS_HOST=redis-db
+      - CHROMA_HOST=chromadb
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}  # 🌟 现在从这里安全读取环境变量
+      - SECRET_KEY=${SECRET_KEY}
+      - HF_HUB_OFFLINE=1
+    volumes:
+      - ./model_cache:/app/model_cache
+    depends_on:
+      - mysql-db
+      - redis-db
+      - chromadb
+    restart: always
+
+  # 5. 异步 Worker 进程
+  worker:
+    build: .
+    container_name: smartkb-worker
+    command: python worker.py
+    environment:
+      - DATABASE_URL=mysql+pymysql://root:123456@mysql-db:3306/smart_kb
+      - REDIS_HOST=redis-db
+      - CHROMA_HOST=chromadb
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}  # 🌟 现在从这里安全读取环境变量
+      - SECRET_KEY=${SECRET_KEY}
+      - HF_HUB_OFFLINE=1
+    volumes:
+      - ./model_cache:/app/model_cache
+    depends_on:
+      - mysql-db
+      - redis-db
+      - chromadb
+    restart: always
+
+volumes:
+  mysql_data:
+  chroma_data:

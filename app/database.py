@@ -1,12 +1,12 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
-
+import os
 # 数据库连接地址（密码 123456）
-DATABASE_URL = "mysql+pymysql://root:123456@127.0.0.1:3306/smart_kb"
+SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL", "mysql+pymysql://root:123456@127.0.0.1:3306/smart_kb")
 
 # 核心：创建带连接池的引擎
 engine = create_engine(
-    DATABASE_URL,
+    SQLALCHEMY_DATABASE_URL,
     pool_size=10,
     max_overflow=20,
     pool_pre_ping=True,  # 自动检测断连并重连

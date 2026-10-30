@@ -6,6 +6,8 @@ from pydantic import BaseModel
 from fastapi.responses import StreamingResponse
 from ..agent_core import run_agent, stream_chat
 from ..auth import get_current_user # 导入
+from ..agent_core import run_agent, run_agent_stream # 🌟 引入流式函数
+
 router = APIRouter(prefix="/chat", tags=["对话"])
 
 # 定义前端传过来的数据格式
@@ -45,9 +47,16 @@ async def chat_with_agent(request: ChatRequest,
         print(f"❌ 抓到了后端报错: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+# 🌟 新增一个流式接口（替代原来的 /stream）
 @router.post("/stream")
-async def chat_stream(request: ChatRequest):
-    # 返回流式响应
-    return StreamingResponse(stream_chat(request.query), media_type="text/event-stream")
+async def chat_stream(
+    request: ChatRequest,
+    current_user: str = Depends(get_current_user)
+):
+    # 返回流式生成器
+    return StreamingResponse(
+        run_agent_stream(request.query, request.session_id, current_user),
+        media_type="text/event-stream"
+    )
 
 
